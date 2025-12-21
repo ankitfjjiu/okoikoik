@@ -1,0 +1,7 @@
+{
+  "name": "Image to url 💗💫",
+  "description": "A lightning-fast image-to-URL converter with Supabase integration and Gemini AI enhancements for smart tagging.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
