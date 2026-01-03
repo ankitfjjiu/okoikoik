@@ -1,4 +1,3 @@
-
 export interface UploadedImage {
   id: string;
   name: string;
@@ -11,7 +10,11 @@ export interface UploadedImage {
   progress: number;
 }
 
+[span_0](start_span)// Naya type compression options ke liye[span_0](end_span)
+export type CompressionMode = 'real' | 'high' | 'low';
+
 export interface SupabaseConfig {
   url: string;
   key: string;
 }
+
