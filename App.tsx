@@ -16,13 +16,12 @@ const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 );
 
-// ✅ New Compression Modes
 type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
 
 const App: React.FC = () => {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [mode, setMode] = useState<CompressionMode>('super_lite'); // ✅ Default: 10-30KB
+  const [mode, setMode] = useState<CompressionMode>('super_lite'); // ✅ Defaut set to 10-30KB
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,21 +39,21 @@ const App: React.FC = () => {
         let width = img.width;
         let height = img.height;
 
-        // ✅ Setting logic based on your requirements
+        // ✅ Declaring variables properly
         let maxDimension = 1200;
         let quality = 0.55;
 
         if (targetMode === 'super_lite') {
-          [cite_start]maxDimension = 720; // Best for 10-30KB target[span_1](end_span)
+          maxDimension = 720; // Best for 10-30KB target
           quality = 0.38;     
         } else if (targetMode === 'default') {
-          maxDimension = 1080; [span_2](start_span)// 40-50KB range[span_2](end_span)
+          maxDimension = 1080; // 40-50KB range
           quality = 0.52;
         } else if (targetMode === 'under200') {
-          maxDimension = 1920; [span_3](start_span)// Under 200KB[span_3](end_span)
+          maxDimension = 1920; // Under 200KB
           quality = 0.78;
         } else {
-          maxDimension = 3000; [span_4](start_span)// Original HQ[span_4](end_span)
+          maxDimension = 3000; // Original HQ
           quality = 0.92;
         }
 
@@ -78,14 +77,13 @@ const App: React.FC = () => {
     });
   };
 
-  [span_5](start_span)[span_6](start_span)// ✅ New Feature: URL to Compressed URL [cite: 28, 38-42]
   const handleUrlUpload = async () => {
     if (!remoteUrl || isUploading) return;
     setIsUploading(true);
     const tempId = Math.random().toString(36).substr(2, 9);
     
     setImages(prev => [{
-      id: tempId, name: 'Remote Image', url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
+      id: tempId, name: 'URL Upload', url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
     }, ...prev]);
 
     try {
@@ -132,17 +130,16 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 font-jakarta">
+    <div className="min-h-screen bg-slate-50 pb-20 font-jakarta antialiased">
       <header className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-lg text-white font-black">SS</div>
-          <h1 className="font-extrabold text-slate-800">SmartSaathi Compressor</h1>
+          <h1 className="font-extrabold text-slate-800 tracking-tight text-lg">SmartSaathi Compressor</h1>
         </div>
-        {images.length > 0 && <button onClick={() => setImages([])} className="text-xs font-bold text-red-500">Clear</button>}
+        {images.length > 0 && <button onClick={() => setImages([])} className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full">Clear All</button>}
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
-        [cite_start]{/* Mode Selector [cite: 55-58] */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
           {[
             { id: 'super_lite', label: '10-30KB', sub: 'Default' },
@@ -157,26 +154,23 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        [cite_start]{/* URL to URL Feature [cite: 61-63] */}
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Paste High Quality Image URL</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">URL to Small WebP Link</p>
           <div className="flex gap-2">
-            <input type="text" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} placeholder="https://example.com/image.jpg" className="flex-1 bg-slate-50 border-none rounded-2xl px-4 py-3 text-xs focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} placeholder="Paste Image Link Here..." className="flex-1 bg-slate-50 border-none rounded-2xl px-4 py-3 text-xs focus:ring-2 focus:ring-indigo-500" />
             <button onClick={handleUrlUpload} className="bg-indigo-600 text-white p-3 rounded-2xl shadow-md active:scale-95 transition-transform"><LinkIcon /></button>
           </div>
         </div>
 
-        [cite_start]{/* File Upload [cite: 60-63] */}
-        <div onClick={() => !isUploading && fileInputRef.current?.click()} className="bg-indigo-600 p-8 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-transform">
-          <h2 className="text-xl font-black mb-1">{isUploading ? "Compressing..." : "Upload Posters"}</h2>
+        <div onClick={() => !isUploading && fileInputRef.current?.click()} className="bg-indigo-600 p-8 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all">
+          <h2 className="text-xl font-black mb-1">{isUploading ? "Compressing..." : "Upload File"}</h2>
           <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">Select Screenshots/Posters</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
         </div>
 
-        [cite_start]{/* Results List [cite: 64-70] */}
         <div className="space-y-4">
           {images.map((image) => (
-            <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+            <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 animate-in fade-in">
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden border">
                   {image.status === 'completed' ? <img src={image.url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-slate-100" />}
@@ -203,3 +197,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
