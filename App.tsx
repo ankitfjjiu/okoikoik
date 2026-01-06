@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef } from 'react';
 import { supabase, STORAGE_BUCKET } from './lib/supabase';
 import { UploadedImage } from './types';
@@ -21,7 +22,7 @@ type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
 const App: React.FC = () => {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [mode, setMode] = useState<CompressionMode>('super_lite'); // ✅ Defaut set to 10-30KB
+  const [mode, setMode] = useState<CompressionMode>('super_lite'); 
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,21 +40,20 @@ const App: React.FC = () => {
         let width = img.width;
         let height = img.height;
 
-        // ✅ Declaring variables properly
         let maxDimension = 1200;
         let quality = 0.55;
 
         if (targetMode === 'super_lite') {
-          maxDimension = 720; // Best for 10-30KB target
+          maxDimension = 720; 
           quality = 0.38;     
         } else if (targetMode === 'default') {
-          maxDimension = 1080; // 40-50KB range
+          maxDimension = 1080; 
           quality = 0.52;
         } else if (targetMode === 'under200') {
-          maxDimension = 1920; // Under 200KB
+          maxDimension = 1920; 
           quality = 0.78;
         } else {
-          maxDimension = 3000; // Original HQ
+          maxDimension = 3000; 
           quality = 0.92;
         }
 
@@ -81,21 +81,22 @@ const App: React.FC = () => {
     if (!remoteUrl || isUploading) return;
     setIsUploading(true);
     const tempId = Math.random().toString(36).substr(2, 9);
+    // ✅ Real name ki jagah pehle hi smartsaathi name set kar diya
+    const storageName = `smartsaathi-${Date.now()}.webp`;
     
     setImages(prev => [{
-      id: tempId, name: 'URL Upload', url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
+      id: tempId, name: storageName, url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
     }, ...prev]);
 
     try {
       const { blob } = await processImageBuffer(remoteUrl, mode);
-      const storageName = `smartsaathi-${Date.now()}.webp`;
       const uploadFile = new File([blob], storageName, { type: 'image/webp' });
 
       const { error: uploadError } = await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
-      setImages(prev => prev.map(img => img.id === tempId ? { ...img, url: publicUrl, status: 'completed', size: uploadFile.size, name: storageName } : img));
+      setImages(prev => prev.map(img => img.id === tempId ? { ...img, url: publicUrl, status: 'completed', size: uploadFile.size } : img));
       setRemoteUrl('');
     } catch (err) {
       console.error(err);
@@ -111,7 +112,19 @@ const App: React.FC = () => {
     
     for (const file of fileArray) {
       const tempId = Math.random().toString(36).substr(2, 9);
-      setImages(prev => [{ id: tempId, name: file.name, url: '', size: file.size, type: file.type, timestamp: Date.now(), status: 'uploading', progress: 0 }, ...prev]);
+      // ✅ Original name ko replace karke naya smartsaathi name banaya
+      const storageName = `smartsaathi-${Date.now()}-${tempId}.webp`;
+      
+      setImages(prev => [{ 
+        id: tempId, 
+        name: storageName, // ✅ Display me bhi naya name aayega
+        url: '', 
+        size: file.size, 
+        type: file.type, 
+        timestamp: Date.now(), 
+        status: 'uploading', 
+        progress: 0 
+      }, ...prev]);
       
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -119,11 +132,17 @@ const App: React.FC = () => {
         const img = new Image();
         img.src = e.target?.result as string;
         const { blob } = await processImageBuffer(img, mode);
-        const storageName = `smartsaathi-${Date.now()}.webp`;
         const uploadFile = new File([blob], storageName, { type: 'image/webp' });
+        
         await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
         const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
-        setImages(prev => prev.map(item => item.id === tempId ? { ...item, url: publicUrl, status: 'completed', size: uploadFile.size } : item));
+        
+        setImages(prev => prev.map(item => item.id === tempId ? { 
+          ...item, 
+          url: publicUrl, 
+          status: 'completed', 
+          size: uploadFile.size 
+        } : item));
       };
     }
     setIsUploading(false);
@@ -172,17 +191,22 @@ const App: React.FC = () => {
           {images.map((image) => (
             <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 animate-in fade-in">
               <div className="flex items-center gap-4 mb-3">
-                <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden border">
+                <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
                   {image.status === 'completed' ? <img src={image.url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-slate-100" />}
                 </div>
-                <div className="flex-1">
-                  <p className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</p>
-                  <p className="text-[10px] font-bold text-indigo-500 bg-indigo-50 w-fit px-1.5 py-0.5 rounded mt-1">{image.status === 'completed' ? `${Math.round(image.size / 1024)} KB` : 'Processing...'}</p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {image.status === 'completed' ? `${Math.round(image.size / 1024)} KB` : 'Processing...'}
+                    </span>
+                    <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">WebP</span>
+                  </div>
                 </div>
               </div>
               {image.status === 'completed' && (
                 <div className="flex gap-2">
-                  <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 border text-[10px] font-bold text-slate-400 truncate">{image.url}</div>
+                  <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 border text-[10px] font-bold text-slate-400 truncate select-all">{image.url}</div>
                   <button onClick={() => { navigator.clipboard.writeText(image.url); setCopyStates(p => ({...p, [image.id]: true})); setTimeout(() => setCopyStates(p => ({...p, [image.id]: false})), 2000); }} className={`px-4 rounded-xl transition-all ${copyStates[image.id] ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
                     {copyStates[image.id] ? <CheckIcon /> : <CopyIcon />}
                   </button>
@@ -197,4 +221,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
