@@ -20,11 +20,10 @@ type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
 const App: React.FC = () => {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  // ✅ UPDATE: Default mode changed to 'default' (40-50KB) as requested
   const [mode, setMode] = useState<CompressionMode>('default'); 
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
-  const [isDragging, setIsDragging] = useState(false); // ✅ UPDATE: State for drag drop UI
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processImageBuffer = async (imgSource: HTMLImageElement | string, targetMode: CompressionMode): Promise<{ blob: Blob }> => {
@@ -69,7 +68,8 @@ const App: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
+          // ✅ UPDATE: Speed Optimization - 'medium' is faster than 'high' with barely noticeable difference
+          ctx.imageSmoothingQuality = 'medium'; 
           ctx.drawImage(img, 0, 0, width, height);
         }
 
@@ -82,7 +82,6 @@ const App: React.FC = () => {
     if (!remoteUrl || isUploading) return;
     setIsUploading(true);
     const tempId = Math.random().toString(36).substr(2, 9);
-    // ✅ Real name ki jagah pehle hi smartsaathi name set kar diya
     const storageName = `smartsaathi-${Date.now()}.webp`;
     setImages(prev => [{
       id: tempId, name: storageName, url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
@@ -109,13 +108,16 @@ const App: React.FC = () => {
     setIsUploading(true);
     const fileArray = Array.from(files);
     
-    for (const file of fileArray) {
+    // ✅ UPDATE: Speed Optimization - Process all images in PARALLEL using Promise.all
+    // This makes loading much faster for multiple files
+    await Promise.all(fileArray.map(async (file) => {
       const tempId = Math.random().toString(36).substr(2, 9);
-      // ✅ Original name ko replace karke naya smartsaathi name banaya
       const storageName = `smartsaathi-${Date.now()}-${tempId}.webp`;
+
+      // Set initial loading state
       setImages(prev => [{ 
         id: tempId, 
-        name: storageName, // ✅ Display me bhi naya name aayega
+        name: storageName,
         url: '', 
         size: file.size, 
         type: file.type, 
@@ -123,29 +125,42 @@ const App: React.FC = () => {
         status: 'uploading', 
         progress: 0 
       }, ...prev]);
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        const { blob } = await processImageBuffer(img, mode);
-        const uploadFile = new File([blob], storageName, { type: 'image/webp' });
-        
-        await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
-        const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
-        
-        setImages(prev => prev.map(item => item.id === tempId ? { 
-          ...item, 
-          url: publicUrl, 
-          status: 'completed', 
-          size: uploadFile.size 
-        } : item));
-      };
-    }
+
+      return new Promise<void>((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async (e) => {
+          try {
+            const img = new Image();
+            img.src = e.target?.result as string;
+            
+            // Process
+            const { blob } = await processImageBuffer(img, mode);
+            const uploadFile = new File([blob], storageName, { type: 'image/webp' });
+            
+            // Upload
+            await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
+            const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
+            
+            // Update Success
+            setImages(prev => prev.map(item => item.id === tempId ? { 
+              ...item, 
+              url: publicUrl, 
+              status: 'completed', 
+              size: uploadFile.size 
+            } : item));
+          } catch (error) {
+            console.error("Upload failed", error);
+            setImages(prev => prev.map(item => item.id === tempId ? { ...item, status: 'error' } : item));
+          }
+          resolve();
+        };
+      });
+    }));
+
     setIsUploading(false);
   };
 
-  // ✅ UPDATE: Drag and Drop Handlers
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
@@ -197,29 +212,27 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ UPDATE: Added Drag events and visual cue */}
+        {/* ✅ UPDATE: UI Changed to be BIGGER (h-80) and Centered */}
         <div 
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onClick={() => !isUploading && fileInputRef.current?.click()} 
-          className={`bg-indigo-600 p-8 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all ${isDragging ? 'ring-4 ring-indigo-300 scale-105 opacity-90' : ''}`}
+          className={`h-80 flex flex-col justify-center items-center bg-indigo-600 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all border-4 border-dashed border-indigo-400/30 ${isDragging ? 'ring-4 ring-indigo-300 scale-105 opacity-90' : ''}`}
         >
-          <h2 className="text-xl font-black mb-1">{isUploading ? "Compressing..." : isDragging ? "Drop Files Here" : "Upload File"}</h2>
-          <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">{isDragging ? "Release to Upload" : "Select Screenshots/Posters"}</p>
+          <h2 className="text-2xl font-black mb-2">{isUploading ? "Compressing..." : isDragging ? "Drop Files Here" : "Upload File"}</h2>
+          <p className="text-xs font-bold opacity-60 uppercase tracking-widest">{isDragging ? "Release to Upload" : "Select Screenshots/Posters"}</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
         </div>
 
         <div className="space-y-4">
           {images.map((image) => (
             <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 animate-in fade-in">
-             
                <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
                   {image.status === 'completed' ? <img src={image.url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-slate-100" />}
                 </div>
                 <div className="flex-1 min-w-0">
-    
                    <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] font-bold text-slate-400">
@@ -228,7 +241,6 @@ const App: React.FC = () => {
                     <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">WebP</span>
                   </div>
                 </div>
-             
                </div>
               {image.status === 'completed' && (
                 <div className="flex gap-2">
@@ -239,7 +251,6 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-  
            ))}
         </div>
       </main>
