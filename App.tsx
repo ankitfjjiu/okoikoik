@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { supabase, STORAGE_BUCKET } from './lib/supabase';
 import { UploadedImage } from './types';
@@ -16,15 +15,16 @@ const CopyIcon = () => (
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 );
-
 type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
 
 const App: React.FC = () => {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [mode, setMode] = useState<CompressionMode>('super_lite'); 
+  // ✅ UPDATE: Default mode changed to 'default' (40-50KB) as requested
+  const [mode, setMode] = useState<CompressionMode>('default'); 
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false); // ✅ UPDATE: State for drag drop UI
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processImageBuffer = async (imgSource: HTMLImageElement | string, targetMode: CompressionMode): Promise<{ blob: Blob }> => {
@@ -37,6 +37,7 @@ const App: React.FC = () => {
 
       img.onload = () => {
         const canvas = document.createElement('canvas');
+  
         let width = img.width;
         let height = img.height;
 
@@ -83,11 +84,9 @@ const App: React.FC = () => {
     const tempId = Math.random().toString(36).substr(2, 9);
     // ✅ Real name ki jagah pehle hi smartsaathi name set kar diya
     const storageName = `smartsaathi-${Date.now()}.webp`;
-    
     setImages(prev => [{
       id: tempId, name: storageName, url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
     }, ...prev]);
-
     try {
       const { blob } = await processImageBuffer(remoteUrl, mode);
       const uploadFile = new File([blob], storageName, { type: 'image/webp' });
@@ -114,7 +113,6 @@ const App: React.FC = () => {
       const tempId = Math.random().toString(36).substr(2, 9);
       // ✅ Original name ko replace karke naya smartsaathi name banaya
       const storageName = `smartsaathi-${Date.now()}-${tempId}.webp`;
-      
       setImages(prev => [{ 
         id: tempId, 
         name: storageName, // ✅ Display me bhi naya name aayega
@@ -125,7 +123,6 @@ const App: React.FC = () => {
         status: 'uploading', 
         progress: 0 
       }, ...prev]);
-      
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = async (e) => {
@@ -147,6 +144,25 @@ const App: React.FC = () => {
     }
     setIsUploading(false);
   };
+
+  // ✅ UPDATE: Drag and Drop Handlers
+  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleUpload(e.dataTransfer.files);
+    }
+  }, [handleUpload]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-jakarta antialiased">
@@ -181,21 +197,30 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div onClick={() => !isUploading && fileInputRef.current?.click()} className="bg-indigo-600 p-8 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all">
-          <h2 className="text-xl font-black mb-1">{isUploading ? "Compressing..." : "Upload File"}</h2>
-          <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">Select Screenshots/Posters</p>
+        {/* ✅ UPDATE: Added Drag events and visual cue */}
+        <div 
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => !isUploading && fileInputRef.current?.click()} 
+          className={`bg-indigo-600 p-8 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all ${isDragging ? 'ring-4 ring-indigo-300 scale-105 opacity-90' : ''}`}
+        >
+          <h2 className="text-xl font-black mb-1">{isUploading ? "Compressing..." : isDragging ? "Drop Files Here" : "Upload File"}</h2>
+          <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">{isDragging ? "Release to Upload" : "Select Screenshots/Posters"}</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
         </div>
 
         <div className="space-y-4">
           {images.map((image) => (
             <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 animate-in fade-in">
-              <div className="flex items-center gap-4 mb-3">
+             
+               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
                   {image.status === 'completed' ? <img src={image.url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-slate-100" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
+    
+                   <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] font-bold text-slate-400">
                       {image.status === 'completed' ? `${Math.round(image.size / 1024)} KB` : 'Processing...'}
@@ -203,7 +228,8 @@ const App: React.FC = () => {
                     <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">WebP</span>
                   </div>
                 </div>
-              </div>
+             
+               </div>
               {image.status === 'completed' && (
                 <div className="flex gap-2">
                   <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 border text-[10px] font-bold text-slate-400 truncate select-all">{image.url}</div>
@@ -213,7 +239,8 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-          ))}
+  
+           ))}
         </div>
       </main>
     </div>
