@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { supabase, STORAGE_BUCKET } from './lib/supabase';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { getSupabaseClient, rotateProject, STORAGE_BUCKET } from './lib/supabase';
 import { UploadedImage } from './types';
 
-// Icons
+// Icons Components
 const LinkIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500">
     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -15,6 +15,7 @@ const CopyIcon = () => (
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 );
+
 type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
 
 const App: React.FC = () => {
@@ -24,7 +25,20 @@ const App: React.FC = () => {
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [activeProject, setActiveProject] = useState(0); // Active project tracker
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize current project index on load
+  useEffect(() => {
+    const { index } = getSupabaseClient();
+    setActiveProject(index);
+  }, []);
+
+  // Project manually switch karne ka button function
+  const handleManualSwitch = () => {
+    const nextIdx = rotateProject();
+    setActiveProject(nextIdx);
+  };
 
   const processImageBuffer = async (imgSource: HTMLImageElement | string, targetMode: CompressionMode): Promise<{ blob: Blob }> => {
     return new Promise((resolve) => {
@@ -33,46 +47,29 @@ const App: React.FC = () => {
         img.crossOrigin = "anonymous";
         img.src = imgSource;
       }
-
       img.onload = () => {
         const canvas = document.createElement('canvas');
-  
         let width = img.width;
         let height = img.height;
-
         let maxDimension = 1200;
         let quality = 0.55;
 
-        if (targetMode === 'super_lite') {
-          maxDimension = 720; 
-          quality = 0.38;     
-        } else if (targetMode === 'default') {
-          maxDimension = 1080; 
-          quality = 0.52;
-        } else if (targetMode === 'under200') {
-          maxDimension = 1920; 
-          quality = 0.78;
-        } else {
-          maxDimension = 3000; 
-          quality = 0.92;
-        }
+        if (targetMode === 'super_lite') { maxDimension = 720; quality = 0.38; }
+        else if (targetMode === 'default') { maxDimension = 1080; quality = 0.52; }
+        else if (targetMode === 'under200') { maxDimension = 1920; quality = 0.78; }
+        else { maxDimension = 3000; quality = 0.92; }
 
         if (width > maxDimension || height > maxDimension) {
           const ratio = Math.min(maxDimension / width, maxDimension / height);
-          width *= ratio;
-          height *= ratio;
+          width *= ratio; height *= ratio;
         }
-
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = true;
-          // ✅ UPDATE: Speed Optimization - 'medium' is faster than 'high' with barely noticeable difference
-          ctx.imageSmoothingQuality = 'medium'; 
+          ctx.imageSmoothingQuality = 'medium';
           ctx.drawImage(img, 0, 0, width, height);
         }
-
         canvas.toBlob((blob) => { if (blob) resolve({ blob }); }, 'image/webp', quality);
       };
     });
@@ -81,20 +78,25 @@ const App: React.FC = () => {
   const handleUrlUpload = async () => {
     if (!remoteUrl || isUploading) return;
     setIsUploading(true);
+    
+    // Dynamic Client Selection
+    const { client } = getSupabaseClient();
+    
     const tempId = Math.random().toString(36).substr(2, 9);
     const storageName = `smartsaathi-${Date.now()}.webp`;
-    setImages(prev => [{
-      id: tempId, name: storageName, url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0
-    }, ...prev]);
+    setImages(prev => [{ id: tempId, name: storageName, url: '', size: 0, type: 'image/webp', timestamp: Date.now(), status: 'uploading', progress: 0 }, ...prev]);
+
     try {
       const { blob } = await processImageBuffer(remoteUrl, mode);
       const uploadFile = new File([blob], storageName, { type: 'image/webp' });
-
-      const { error: uploadError } = await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
+      const { error: uploadError } = await client.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
+      const { data: { publicUrl } } = client.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
       setImages(prev => prev.map(img => img.id === tempId ? { ...img, url: publicUrl, status: 'completed', size: uploadFile.size } : img));
+      
+      // Auto-Rotate Project after success
+      setActiveProject(rotateProject());
       setRemoteUrl('');
     } catch (err) {
       console.error(err);
@@ -108,23 +110,13 @@ const App: React.FC = () => {
     setIsUploading(true);
     const fileArray = Array.from(files);
     
-    // ✅ UPDATE: Speed Optimization - Process all images in PARALLEL using Promise.all
-    // This makes loading much faster for multiple files
     await Promise.all(fileArray.map(async (file) => {
+      // Har upload ke liye naya client check
+      const { client } = getSupabaseClient();
       const tempId = Math.random().toString(36).substr(2, 9);
       const storageName = `smartsaathi-${Date.now()}-${tempId}.webp`;
 
-      // Set initial loading state
-      setImages(prev => [{ 
-        id: tempId, 
-        name: storageName,
-        url: '', 
-        size: file.size, 
-        type: file.type, 
-        timestamp: Date.now(), 
-        status: 'uploading', 
-        progress: 0 
-      }, ...prev]);
+      setImages(prev => [{ id: tempId, name: storageName, url: '', size: file.size, type: file.type, timestamp: Date.now(), status: 'uploading', progress: 0 }, ...prev]);
 
       return new Promise<void>((resolve) => {
         const reader = new FileReader();
@@ -133,22 +125,16 @@ const App: React.FC = () => {
           try {
             const img = new Image();
             img.src = e.target?.result as string;
-            
-            // Process
             const { blob } = await processImageBuffer(img, mode);
             const uploadFile = new File([blob], storageName, { type: 'image/webp' });
+
+            await client.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
+            const { data: { publicUrl } } = client.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
             
-            // Upload
-            await supabase.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
-            const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
+            setImages(prev => prev.map(item => item.id === tempId ? { ...item, url: publicUrl, status: 'completed', size: uploadFile.size } : item));
             
-            // Update Success
-            setImages(prev => prev.map(item => item.id === tempId ? { 
-              ...item, 
-              url: publicUrl, 
-              status: 'completed', 
-              size: uploadFile.size 
-            } : item));
+            // Success par project switch karein
+            setActiveProject(rotateProject());
           } catch (error) {
             console.error("Upload failed", error);
             setImages(prev => prev.map(item => item.id === tempId ? { ...item, status: 'error' } : item));
@@ -157,39 +143,29 @@ const App: React.FC = () => {
         };
       });
     }));
-
     setIsUploading(false);
   };
-
-  const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const onDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const onDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files);
-    }
-  }, [handleUpload]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-jakarta antialiased">
       <header className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-lg text-white font-black">SS</div>
-          <h1 className="font-extrabold text-slate-800 tracking-tight text-lg">SmartSaathi Compressor</h1>
+          <div>
+            <h1 className="font-extrabold text-slate-800 tracking-tight text-sm">SmartSaathi</h1>
+            <button 
+              onClick={handleManualSwitch}
+              className="text-[9px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold border border-emerald-100 mt-0.5 hover:bg-emerald-100 transition-colors"
+            >
+              Active Project: #{activeProject + 1} (Tap to Switch)
+            </button>
+          </div>
         </div>
         {images.length > 0 && <button onClick={() => setImages([])} className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full">Clear All</button>}
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
+        {/* Compression Modes Selection */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
           {[
             { id: 'super_lite', label: '10-30KB', sub: 'Default' },
@@ -204,6 +180,7 @@ const App: React.FC = () => {
           ))}
         </div>
 
+        {/* URL Upload Box */}
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 space-y-3">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">URL to Small WebP Link</p>
           <div className="flex gap-2">
@@ -212,11 +189,11 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ✅ UPDATE: UI Changed to be BIGGER (h-80) and Centered */}
+        {/* Big Upload Area */}
         <div 
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files) handleUpload(e.dataTransfer.files); }}
           onClick={() => !isUploading && fileInputRef.current?.click()} 
           className={`h-80 flex flex-col justify-center items-center bg-indigo-600 rounded-[2.5rem] text-center text-white shadow-2xl shadow-indigo-200 cursor-pointer active:scale-[0.98] transition-all border-4 border-dashed border-indigo-400/30 ${isDragging ? 'ring-4 ring-indigo-300 scale-105 opacity-90' : ''}`}
         >
@@ -225,6 +202,7 @@ const App: React.FC = () => {
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => handleUpload(e.target.files)} />
         </div>
 
+        {/* Results List */}
         <div className="space-y-4">
           {images.map((image) => (
             <div key={image.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 animate-in fade-in">
@@ -233,7 +211,7 @@ const App: React.FC = () => {
                   {image.status === 'completed' ? <img src={image.url} className="w-full h-full object-cover" /> : <div className="w-full h-full animate-pulse bg-slate-100" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                   <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
+                  <h4 className="text-[10px] font-black text-slate-800 truncate uppercase">{image.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] font-bold text-slate-400">
                       {image.status === 'completed' ? `${Math.round(image.size / 1024)} KB` : 'Processing...'}
@@ -241,7 +219,7 @@ const App: React.FC = () => {
                     <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">WebP</span>
                   </div>
                 </div>
-               </div>
+              </div>
               {image.status === 'completed' && (
                 <div className="flex gap-2">
                   <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 border text-[10px] font-bold text-slate-400 truncate select-all">{image.url}</div>
@@ -251,7 +229,7 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-           ))}
+          ))}
         </div>
       </main>
     </div>
