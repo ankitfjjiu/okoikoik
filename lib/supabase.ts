@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const projects = [
-  { id: 1, url: 'https://myuqhthjcmuamiftwxyb.supabase.co', key: 'sb_publishable_YcrVKkzLUCi8auCHswcfqw_Vid0GWuF' },
+  { id: 1, url: 'https://pzfvdryaqxwhrtfhpood.supabase.co', key: 'sb_publishable_R5cblIRgwcT0vnTTAY6_1Q_RzHM044n' },
   { id: 2, url: 'https://ohyszjcmnnoqpaegozxq.supabase.co', key: 'sb_publishable_GPeydA56Zvp3IgAxHlzy9g_c51IzpTG' },
   { id: 3, url: 'https://ptpwbxqvxdyzmgthvstj.supabase.co', key: 'sb_publishable_b3uo7jjjEyLGiJ4prGXV7A_fp8Kd7lJ' },
   { id: 4, url: 'https://dmbgokkudhmtthfisbop.supabase.co', key: 'sb_publishable_U0yEQrTn0kCleNvBbBce6A_R6gr7qk6' },
