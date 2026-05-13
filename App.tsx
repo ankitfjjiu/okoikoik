@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getSupabaseClient, rotateProject, STORAGE_BUCKET } from './lib/supabase';
 
+// Icons components
 const LinkIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
 );
@@ -14,11 +15,13 @@ const CheckIcon = () => (
 );
 
 type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
+type NamingPrefix = 'SmartSaathi' | 'MoviesHub';
 
 const App: React.FC = () => {
   const [images, setImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [mode, setMode] = useState<CompressionMode>('default');
+  const [prefix, setPrefix] = useState<NamingPrefix>('SmartSaathi'); // Naming choice state
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -37,7 +40,7 @@ const App: React.FC = () => {
 
   const cleanFileName = (name: string): string => {
     let clean = name.replace(/\.[^/.]+$/, ""); 
-    clean = clean.replace(/(Filmyfly|Filmy|Filmyzilla|Filmywap)/gi, "");
+    clean = clean.replace(/(Filmyfly|Filmy|Filmyzilla|Filmywap|Bolly|Hollywood)/gi, "");
     clean = clean.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-");
     return clean.toLowerCase().replace(/^-|-$/g, "");
   };
@@ -86,7 +89,7 @@ const App: React.FC = () => {
     
     const urlName = remoteUrl.split('/').pop() || 'image';
     const cleanedBase = cleanFileName(urlName);
-    const storageName = `SmartSaathi-${cleanedBase}-${Date.now()}.webp`;
+    const storageName = `${prefix}-${cleanedBase}-${Date.now()}.webp`;
 
     setImages(prev => [{ id: tempId, name: storageName, url: '', status: 'uploading' }, ...prev]);
     try {
@@ -112,7 +115,7 @@ const App: React.FC = () => {
     await Promise.all(Array.from(files).map(async (file) => {
       const tempId = Math.random().toString(36).substr(2, 9);
       const cleanedBase = cleanFileName(file.name);
-      const storageName = `SmartSaathi-${cleanedBase}-${Date.now()}.webp`;
+      const storageName = `${prefix}-${cleanedBase}-${Date.now()}.webp`;
 
       setImages(prev => [{ id: tempId, name: storageName, url: '', status: 'uploading' }, ...prev]);
       
@@ -153,6 +156,19 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
+        {/* Choice for Prefix */}
+        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+          {(['SmartSaathi', 'MoviesHub'] as NamingPrefix[]).map((p) => (
+            <button 
+              key={p} 
+              onClick={() => setPrefix(p)}
+              className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${prefix === p ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
           {[{id:'super_lite',l:'10-30KB'},{id:'default',l:'40-50KB'},{id:'under200',l:'200KB'},{id:'original',l:'Original'}].map((m)=>(
             <button key={m.id} onClick={()=>setMode(m.id as CompressionMode)} className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all min-w-[100px] ${mode===m.id?'bg-indigo-600 text-white':'bg-white text-slate-500'}`}>
@@ -175,18 +191,23 @@ const App: React.FC = () => {
           {images.map((img)=>(
             <div key={img.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center gap-4 mb-3">
-                <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden">
-                  {img.status==='completed'?<img src={img.url} className="w-full h-full object-cover" alt="img" />:<div className="w-full h-full animate-pulse bg-slate-200" />}
+                {/* Small Preview Image */}
+                <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden flex-shrink-0 border">
+                  {img.status==='completed' ? (
+                    <img src={img.url} className="w-full h-full object-cover" alt="preview" />
+                  ) : (
+                    <div className="w-full h-full animate-pulse bg-slate-200" />
+                  )}
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-[10px] font-black truncate">{img.name}</h4>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[10px] font-black truncate text-slate-700">{img.name}</h4>
                   <span className="text-[10px] font-bold text-slate-400">{img.status==='completed'?`${Math.round(img.size/1024)}KB`:'Wait...'}</span>
                 </div>
               </div>
               {img.status==='completed' && (
                 <div className="flex gap-2">
-                  <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-[10px] truncate border">{img.url}</div>
-                  <button onClick={()=>{navigator.clipboard.writeText(img.url);setCopyStates(p=>({...p,[img.id]:true}));setTimeout(()=>setCopyStates(p=>({...p,[img.id]:false})),2000);}} className={`px-4 rounded-xl ${copyStates[img.id]?'bg-emerald-500':'bg-slate-900'} text-white`}>
+                  <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-[10px] truncate border font-medium text-slate-500">{img.url}</div>
+                  <button onClick={()=>{navigator.clipboard.writeText(img.url);setCopyStates(p=>({...p,[img.id]:true}));setTimeout(()=>setCopyStates(p=>({...p,[img.id]:false})),2000);}} className={`px-4 rounded-xl transition-colors ${copyStates[img.id]?'bg-emerald-500':'bg-slate-900'} text-white`}>
                     {copyStates[img.id]?<CheckIcon />:<CopyIcon />}
                   </button>
                 </div>
