@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getSupabaseClient, rotateProject, STORAGE_BUCKET } from './lib/supabase';
 
-// Icons components ko function se bahar rakha hai cleanup ke liye
+// Icons components
 const LinkIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
 );
+
 const CopyIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
 );
+
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 );
@@ -32,6 +34,14 @@ const App: React.FC = () => {
   const handleManualSwitch = () => {
     const nextIdx = rotateProject();
     setActiveProject(nextIdx);
+  };
+
+  // Helper function to clean filenames from "Filmy" keywords
+  const cleanFileName = (name: string): string => {
+    let clean = name.replace(/\.[^/.]+$/, ""); // Remove extension
+    clean = clean.replace(/(Filmyfly|Filmy|Filmyzilla|Filmywap)/gi, ""); [span_1](start_span)// Remove unwanted keywords[span_1](end_span)
+    clean = clean.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-"); // Replace special chars with hyphen
+    return clean.toLowerCase().replace(/^-|-$/g, ""); // Trim hyphens
   };
 
   const processImageBuffer = async (imgSource: HTMLImageElement | string, targetMode: CompressionMode): Promise<{ blob: Blob }> => {
@@ -75,7 +85,12 @@ const App: React.FC = () => {
     setIsUploading(true);
     const { client } = getSupabaseClient();
     const tempId = Math.random().toString(36).substr(2, 9);
-    const storageName = `ss-${Date.now()}.webp`;
+    
+    // Remote URL se name extract kar ke clean karna
+    const urlName = remoteUrl.split('/').pop() || 'image';
+    const cleanedBase = cleanFileName(urlName);
+    [span_2](start_span)[span_3](start_span)const storageName = `SmartSaathi-${cleanedBase}-${Date.now()}.webp`;[span_2](end_span)[span_3](end_span)
+
     setImages(prev => [{ id: tempId, name: storageName, url: '', status: 'uploading' }, ...prev]);
     try {
       const { blob } = await processImageBuffer(remoteUrl, mode);
@@ -98,7 +113,11 @@ const App: React.FC = () => {
     await Promise.all(Array.from(files).map(async (file) => {
       const { client } = getSupabaseClient();
       const tempId = Math.random().toString(36).substr(2, 9);
-      const storageName = `ss-${Date.now()}-${tempId}.webp`;
+      
+      // Filename clean karke "SmartSaathi" prefix lagana
+      const cleanedBase = cleanFileName(file.name);
+      [span_4](start_span)[span_5](start_span)const storageName = `SmartSaathi-${cleanedBase}-${Date.now()}.webp`;[span_4](end_span)[span_5](end_span)
+
       setImages(prev => [{ id: tempId, name: storageName, url: '', status: 'uploading' }, ...prev]);
       return new Promise<void>((resolve) => {
         const reader = new FileReader();
