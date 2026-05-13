@@ -21,12 +21,15 @@ const App: React.FC = () => {
   const [images, setImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [mode, setMode] = useState<CompressionMode>('default');
-  const [prefix, setPrefix] = useState<NamingPrefix>('SmartSaathi'); // Naming choice state
+  const [prefix, setPrefix] = useState<NamingPrefix>('SmartSaathi');
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [activeProject, setActiveProject] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cloudflare Worker URL
+  const WORKER_URL = "https://image.smartsaathi.workers.dev";
 
   useEffect(() => {
     const { index } = getSupabaseClient();
@@ -36,6 +39,18 @@ const App: React.FC = () => {
   const handleManualSwitch = () => {
     const nextIdx = rotateProject();
     setActiveProject(nextIdx);
+  };
+
+  // CDN URL Helper: Supabase URL ko Worker URL format mein convert karta hai
+  const getCdnUrl = (supabaseUrl: string) => {
+    if (!supabaseUrl) return '';
+    try {
+      const urlObj = new URL(supabaseUrl);
+      const projectId = urlObj.hostname.split('.')[0];
+      return `${WORKER_URL}${urlObj.pathname}?project=${projectId}`;
+    } catch {
+      return supabaseUrl;
+    }
   };
 
   const cleanFileName = (name: string): string => {
@@ -86,7 +101,6 @@ const App: React.FC = () => {
     setIsUploading(true);
     const { client } = getSupabaseClient();
     const tempId = Math.random().toString(36).substr(2, 9);
-    
     const urlName = remoteUrl.split('/').pop() || 'image';
     const cleanedBase = cleanFileName(urlName);
     const storageName = `${prefix}-${cleanedBase}-${Date.now()}.webp`;
@@ -156,7 +170,6 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
-        {/* Choice for Prefix */}
         <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
           {(['SmartSaathi', 'MoviesHub'] as NamingPrefix[]).map((p) => (
             <button 
@@ -188,32 +201,34 @@ const App: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          {images.map((img)=>(
-            <div key={img.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
-              <div className="flex items-center gap-4 mb-3">
-                {/* Small Preview Image */}
-                <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden flex-shrink-0 border">
-                  {img.status==='completed' ? (
-                    <img src={img.url} className="w-full h-full object-cover" alt="preview" />
-                  ) : (
-                    <div className="w-full h-full animate-pulse bg-slate-200" />
-                  )}
+          {images.map((img) => {
+            const finalCdnUrl = getCdnUrl(img.url);
+            return (
+              <div key={img.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl overflow-hidden flex-shrink-0 border border-slate-100">
+                    {img.status==='completed' ? (
+                      <img src={finalCdnUrl} className="w-full h-full object-cover" alt="preview" />
+                    ) : (
+                      <div className="w-full h-full animate-pulse bg-slate-200" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-[10px] font-black truncate text-slate-700">{img.name}</h4>
+                    <span className="text-[10px] font-bold text-slate-400">{img.status==='completed'?`${Math.round(img.size/1024)}KB`:'Wait...'}</span>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[10px] font-black truncate text-slate-700">{img.name}</h4>
-                  <span className="text-[10px] font-bold text-slate-400">{img.status==='completed'?`${Math.round(img.size/1024)}KB`:'Wait...'}</span>
-                </div>
+                {img.status==='completed' && (
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-[10px] truncate border font-medium text-slate-500">{finalCdnUrl}</div>
+                    <button onClick={()=>{navigator.clipboard.writeText(finalCdnUrl);setCopyStates(p=>({...p,[img.id]:true}));setTimeout(()=>setCopyStates(p=>({...p,[img.id]:false})),2000);}} className={`px-4 rounded-xl transition-colors ${copyStates[img.id]?'bg-emerald-500':'bg-slate-900'} text-white`}>
+                      {copyStates[img.id]?<CheckIcon />:<CopyIcon />}
+                    </button>
+                  </div>
+                )}
               </div>
-              {img.status==='completed' && (
-                <div className="flex gap-2">
-                  <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-[10px] truncate border font-medium text-slate-500">{img.url}</div>
-                  <button onClick={()=>{navigator.clipboard.writeText(img.url);setCopyStates(p=>({...p,[img.id]:true}));setTimeout(()=>setCopyStates(p=>({...p,[img.id]:false})),2000);}} className={`px-4 rounded-xl transition-colors ${copyStates[img.id]?'bg-emerald-500':'bg-slate-900'} text-white`}>
-                    {copyStates[img.id]?<CheckIcon />:<CopyIcon />}
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </div>
