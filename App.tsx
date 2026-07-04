@@ -14,14 +14,30 @@ const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
 );
 
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+);
+
 type CompressionMode = 'super_lite' | 'default' | 'under200' | 'original';
-type NamingPrefix = 'SmartSaathi' | 'MoviesHub';
+type NamingPrefix = 'Smarsaathi' | 'MoviesHub';
 
 const App: React.FC = () => {
-  const [images, setImages] = useState<any[]>([]);
+  // 1. LocalStorage se initial state load karna
+  const [images, setImages] = useState<any[]>(() => {
+    const saved = localStorage.getItem('smarsaathi_saved_images');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+
   const [isUploading, setIsUploading] = useState(false);
   const [mode, setMode] = useState<CompressionMode>('default');
-  const [prefix, setPrefix] = useState<NamingPrefix>('SmartSaathi');
+  const [prefix, setPrefix] = useState<NamingPrefix>('Smarsaathi');
   const [copyStates, setCopyStates] = useState<Record<string, boolean>>({});
   const [remoteUrl, setRemoteUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -30,6 +46,11 @@ const App: React.FC = () => {
 
   // Cloudflare Worker URL
   const WORKER_URL = "https://image.smartsaathi.workers.dev";
+
+  // 2. Jaise hi images state update ho, LocalStorage mein save karein
+  useEffect(() => {
+    localStorage.setItem('smarsaathi_saved_images', JSON.stringify(images));
+  }, [images]);
 
   useEffect(() => {
     const { index } = getSupabaseClient();
@@ -41,7 +62,6 @@ const App: React.FC = () => {
     setActiveProject(nextIdx);
   };
 
-  // CDN URL Helper: Supabase URL ko Worker URL format mein convert karta hai
   const getCdnUrl = (supabaseUrl: string) => {
     if (!supabaseUrl) return '';
     try {
@@ -136,15 +156,18 @@ const App: React.FC = () => {
       return new Promise<void>((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
+       
         reader.onload = async (e) => {
           try {
             const img = new Image();
             img.src = e.target?.result as string;
             const { blob } = await processImageBuffer(img, mode);
             const uploadFile = new File([blob], storageName, { type: 'image/webp' });
+           
             await client.storage.from(STORAGE_BUCKET).upload(storageName, uploadFile);
             const { data } = client.storage.from(STORAGE_BUCKET).getPublicUrl(storageName);
-            setImages(prev => prev.map(item => item.id === tempId ? { ...item, url: data.publicUrl, status: 'completed', size: uploadFile.size } : item));
+            setImages(prev => prev.map(item => item.id === tempId ?
+              { ...item, url: data.publicUrl, status: 'completed', size: uploadFile.size } : item));
             setActiveProject(rotateProject());
           } catch (error) {
             setImages(prev => prev.map(item => item.id === tempId ? { ...item, status: 'error' } : item));
@@ -156,26 +179,38 @@ const App: React.FC = () => {
     setIsUploading(false);
   };
 
+  // 3. Individual image ko delete karne ka function
+  const handleDeleteImage = (id: string) => {
+    setImages(prev => prev.filter(img => img.id !== id));
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20 font-jakarta antialiased">
       <header className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-lg text-white font-black text-xs">SS</div>
           <div>
-            <h1 className="font-extrabold text-slate-800 text-sm">SmartSaathi</h1>
-            <button onClick={handleManualSwitch} className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">Project: #{activeProject + 1}</button>
+            <h1 className="font-extrabold text-slate-800 text-sm">Smarsaathi</h1>
+            <button onClick={handleManualSwitch} className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-bold">
+              Project: #{activeProject + 1}
+            </button>
           </div>
         </div>
-        {images.length > 0 && <button onClick={() => setImages([])} className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full">Clear</button>}
+        {images.length > 0 && (
+          <button onClick={() => setImages([])} className="text-xs font-bold text-red-500 bg-red-50 px-3 py-1 rounded-full">
+            Clear All
+          </button>
+        )}
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
         <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
-          {(['SmartSaathi', 'MoviesHub'] as NamingPrefix[]).map((p) => (
+          {(['Smarsaathi', 'MoviesHub'] as NamingPrefix[]).map((p) => (
             <button 
               key={p} 
               onClick={() => setPrefix(p)}
-              className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${prefix === p ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}
+              className={`flex-1 py-2 text-[11px] font-black rounded-xl transition-all ${prefix === p ?
+                'bg-indigo-600 text-white shadow-md' : 'text-slate-400'}`}
             >
               {p}
             </button>
@@ -184,7 +219,8 @@ const App: React.FC = () => {
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
           {[{id:'super_lite',l:'10-30KB'},{id:'default',l:'40-50KB'},{id:'under200',l:'200KB'},{id:'original',l:'Original'}].map((m)=>(
-            <button key={m.id} onClick={()=>setMode(m.id as CompressionMode)} className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all min-w-[100px] ${mode===m.id?'bg-indigo-600 text-white':'bg-white text-slate-500'}`}>
+            <button key={m.id} onClick={()=>setMode(m.id as CompressionMode)} 
+              className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all min-w-[100px] ${mode===m.id?'bg-indigo-600 text-white':'bg-white text-slate-500'}`}>
               <div className="text-xs font-black">{m.l}</div>
             </button>
           ))}
@@ -221,8 +257,14 @@ const App: React.FC = () => {
                 {img.status==='completed' && (
                   <div className="flex gap-2">
                     <div className="flex-1 bg-slate-50 rounded-xl px-3 py-2 text-[10px] truncate border font-medium text-slate-500">{finalCdnUrl}</div>
+                    
                     <button onClick={()=>{navigator.clipboard.writeText(finalCdnUrl);setCopyStates(p=>({...p,[img.id]:true}));setTimeout(()=>setCopyStates(p=>({...p,[img.id]:false})),2000);}} className={`px-4 rounded-xl transition-colors ${copyStates[img.id]?'bg-emerald-500':'bg-slate-900'} text-white`}>
                       {copyStates[img.id]?<CheckIcon />:<CopyIcon />}
+                    </button>
+
+                    {/* New Delete Button for specific image */}
+                    <button onClick={() => handleDeleteImage(img.id)} className="px-4 rounded-xl transition-colors bg-red-50 text-red-500 hover:bg-red-500 hover:text-white">
+                      <TrashIcon />
                     </button>
                   </div>
                 )}
